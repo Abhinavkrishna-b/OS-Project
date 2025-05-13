@@ -11,14 +11,14 @@
       padding: 40px;
       text-align: center;
     }
-  
+
     h1 {
       font-size: 2.5em;
       margin-bottom: 20px;
       color: #00bcd4;
     }
-  
-    input[type="text"], input[type="number"] {
+
+    input[type="text"], input[type="number"], select {
       background-color: #1e1e1e;
       border: 2px solid #333;
       color: #fff;
@@ -30,12 +30,12 @@
       transition: 0.3s ease;
       outline: none;
     }
-  
-    input:focus {
+
+    input:focus, select:focus {
       border-color: #00bcd4;
       box-shadow: 0 0 5px #00bcd4;
     }
-  
+
     button {
       background: linear-gradient(135deg, #00bcd4, #1de9b6);
       border: none;
@@ -47,13 +47,13 @@
       cursor: pointer;
       transition: transform 0.2s, background 0.3s;
     }
-  
+
     button:hover {
       transform: scale(1.05);
       background: linear-gradient(135deg, #1de9b6, #00bcd4);
       box-shadow: 0 4px 15px rgba(0, 188, 212, 0.3);
     }
-  
+
     .results {
       margin-top: 40px;
       text-align: left;
@@ -64,21 +64,21 @@
       border-radius: 12px;
       box-shadow: 0 0 10px #00bcd4;
     }
-  
+
     .algo {
       margin-bottom: 25px;
     }
-  
+
     .algo h3 {
       margin-bottom: 10px;
       color: #1de9b6;
     }
-  
+
     .algo p {
       margin: 4px 0;
       color: #ccc;
       font-size: 15px;
-    }  
+    }
   </style>
 </head>
 <body>
@@ -86,25 +86,35 @@
   <input type="text" id="queue" placeholder="Enter disk queue (e.g. 82 170 43 140 24 16 190)" /><br />
   <input type="number" id="head" placeholder="Initial head position" /><br />
   <input type="number" id="diskSize" placeholder="Total disk size (e.g. 200)" /><br />
+  <select id="direction">
+    <option value="forward">Forward</option>
+    <option value="backward">Backward</option>
+  </select><br />
   <button onclick="simulate()">Simulate</button>
 
   <div class="results" id="results"></div>
 
   <script>
     function simulate() {
-      const queue = document.getElementById("queue").value.split(" ").map(Number);
+      const queue = document.getElementById("queue").value.split(" ").map(Number).filter(n => !isNaN(n));
       const head = parseInt(document.getElementById("head").value);
       const diskSize = parseInt(document.getElementById("diskSize").value);
+      const direction = document.getElementById("direction").value;
       const resultsDiv = document.getElementById("results");
       resultsDiv.innerHTML = "";
+
+      if (!queue.length || isNaN(head) || isNaN(diskSize)) {
+        resultsDiv.innerHTML = "<p>Please fill in all inputs correctly.</p>";
+        return;
+      }
 
       const results = {
         FCFS: fcfs(queue, head),
         SSTF: sstf(queue, head),
-        SCAN: scan(queue, head, diskSize),
-        'C-SCAN': cscan(queue, head, diskSize),
-        LOOK: look(queue, head),
-        'C-LOOK': clook(queue, head),
+        SCAN: scan(queue, head, diskSize, direction),
+        'C-SCAN': cscan(queue, head, diskSize, direction),
+        LOOK: look(queue, head, direction),
+        'C-LOOK': clook(queue, head, direction),
       };
 
       for (const algo in results) {
@@ -143,91 +153,165 @@
       return { sequence: seq, movement };
     }
 
-    function scan(queue, head, diskSize) {
+    function scan(queue, head, diskSize, direction) {
       let movement = 0, current = head;
       const seq = [current];
-      const left = queue.filter(r => r < head).sort((a,b)=>b-a);
-      const right = queue.filter(r => r >= head).sort((a,b)=>a-b);
-      for (const r of right) {
-        movement += Math.abs(current - r);
-        current = r;
-        seq.push(current);
-      }
-      if (current < diskSize - 1) {
-        movement += Math.abs(current - (diskSize - 1));
-        current = diskSize - 1;
-        seq.push(current);
-      }
-      for (const r of left) {
-        movement += Math.abs(current - r);
-        current = r;
-        seq.push(current);
+      const left = queue.filter(r => r < head).sort((a, b) => b - a);
+      const right = queue.filter(r => r >= head).sort((a, b) => a - b);
+
+      if (direction === "forward") {
+        for (const r of right) {
+          movement += Math.abs(current - r);
+          current = r;
+          seq.push(current);
+        }
+        if (current < diskSize - 1) {
+          movement += Math.abs(current - (diskSize - 1));
+          current = diskSize - 1;
+          seq.push(current);
+        }
+        for (const r of left) {
+          movement += Math.abs(current - r);
+          current = r;
+          seq.push(current);
+        }
+      } else {
+        for (const r of left) {
+          movement += Math.abs(current - r);
+          current = r;
+          seq.push(current);
+        }
+        if (current > 0) {
+          movement += Math.abs(current - 0);
+          current = 0;
+          seq.push(current);
+        }
+        for (const r of right) {
+          movement += Math.abs(current - r);
+          current = r;
+          seq.push(current);
+        }
       }
       return { sequence: seq, movement };
     }
 
-    function cscan(queue, head, diskSize) {
+    function cscan(queue, head, diskSize, direction) {
       let movement = 0, current = head;
       const seq = [current];
-      const left = queue.filter(r => r < head).sort((a,b)=>a-b);
-      const right = queue.filter(r => r >= head).sort((a,b)=>a-b);
-      for (const r of right) {
-        movement += Math.abs(current - r);
-        current = r;
-        seq.push(current);
-      }
-      if (current < diskSize - 1) {
-        movement += Math.abs(current - (diskSize - 1));
-        current = diskSize - 1;
-        seq.push(current);
-      }
-      movement += diskSize - 1; // jump to 0
-      current = 0;
-      seq.push(0);
-      for (const r of left) {
-        movement += Math.abs(current - r);
-        current = r;
-        seq.push(current);
-      }
-      return { sequence: seq, movement };
-    }
+      const left = queue.filter(r => r < head).sort((a, b) => a - b);
+      const right = queue.filter(r => r >= head).sort((a, b) => a - b);
 
-    function look(queue, head) {
-      let movement = 0, current = head;
-      const seq = [current];
-      const left = queue.filter(r => r < head).sort((a,b)=>b-a);
-      const right = queue.filter(r => r >= head).sort((a,b)=>a-b);
-      for (const r of right) {
-        movement += Math.abs(current - r);
-        current = r;
+      if (direction === "forward") {
+        for (const r of right) {
+          movement += Math.abs(current - r);
+          current = r;
+          seq.push(current);
+        }
+        if (current < diskSize - 1) {
+          movement += Math.abs(current - (diskSize - 1));
+          current = diskSize - 1;
+          seq.push(current);
+        }
+        movement += diskSize - 1;
+        current = 0;
         seq.push(current);
-      }
-      for (const r of left) {
-        movement += Math.abs(current - r);
-        current = r;
-        seq.push(current);
-      }
-      return { sequence: seq, movement };
-    }
-
-    function clook(queue, head) {
-      let movement = 0, current = head;
-      const seq = [current];
-      const left = queue.filter(r => r < head).sort((a,b)=>a-b);
-      const right = queue.filter(r => r >= head).sort((a,b)=>a-b);
-      for (const r of right) {
-        movement += Math.abs(current - r);
-        current = r;
-        seq.push(current);
-      }
-      if (left.length > 0) {
-        movement += Math.abs(current - left[0]);
-        current = left[0];
-        seq.push(current);
-        for (let i = 1; i < left.length; i++) {
+        for (const r of left) {
+          movement += Math.abs(current - r);
+          current = r;
+          seq.push(current);
+        }
+      } else {
+        for (let i = left.length - 1; i >= 0; i--) {
           movement += Math.abs(current - left[i]);
           current = left[i];
           seq.push(current);
+        }
+        if (current > 0) {
+          movement += current;
+          current = 0;
+          seq.push(current);
+        }
+        movement += diskSize - 1;
+        current = diskSize - 1;
+        seq.push(current);
+        for (let i = right.length - 1; i >= 0; i--) {
+          movement += Math.abs(current - right[i]);
+          current = right[i];
+          seq.push(current);
+        }
+      }
+      return { sequence: seq, movement };
+    }
+
+    function look(queue, head, direction) {
+      let movement = 0, current = head;
+      const seq = [current];
+      const left = queue.filter(r => r < head).sort((a, b) => b - a);
+      const right = queue.filter(r => r >= head).sort((a, b) => a - b);
+
+      if (direction === "forward") {
+        for (const r of right) {
+          movement += Math.abs(current - r);
+          current = r;
+          seq.push(current);
+        }
+        for (const r of left) {
+          movement += Math.abs(current - r);
+          current = r;
+          seq.push(current);
+        }
+      } else {
+        for (const r of left) {
+          movement += Math.abs(current - r);
+          current = r;
+          seq.push(current);
+        }
+        for (const r of right) {
+          movement += Math.abs(current - r);
+          current = r;
+          seq.push(current);
+        }
+      }
+      return { sequence: seq, movement };
+    }
+
+    function clook(queue, head, direction) {
+      let movement = 0, current = head;
+      const seq = [current];
+      const left = queue.filter(r => r < head).sort((a, b) => a - b);
+      const right = queue.filter(r => r >= head).sort((a, b) => a - b);
+
+      if (direction === "forward") {
+        for (const r of right) {
+          movement += Math.abs(current - r);
+          current = r;
+          seq.push(current);
+        }
+        if (left.length > 0) {
+          movement += Math.abs(current - left[0]);
+          current = left[0];
+          seq.push(current);
+          for (let i = 1; i < left.length; i++) {
+            movement += Math.abs(current - left[i]);
+            current = left[i];
+            seq.push(current);
+          }
+        }
+      } else {
+        for (let i = left.length - 1; i >= 0; i--) {
+          movement += Math.abs(current - left[i]);
+          current = left[i];
+          seq.push(current);
+        }
+        if (right.length > 0) {
+          movement += Math.abs(current - right[right.length - 1]);
+          current = right[right.length - 1];
+          seq.push(current);
+          for (let i = right.length - 2; i >= 0; i--) {
+            movement += Math.abs(current - right[i]);
+            current = right[i];
+            seq.push(current);
+          }
         }
       }
       return { sequence: seq, movement };
