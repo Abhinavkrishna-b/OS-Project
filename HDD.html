@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>HDD Scheduling Simulator</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #121212;
+      color: #f1f1f1;
+      padding: 40px;
+      text-align: center;
+    }
+  
+    h1 {
+      font-size: 2.5em;
+      margin-bottom: 20px;
+      color: #00bcd4;
+    }
+  
+    input[type="text"], input[type="number"] {
+      background-color: #1e1e1e;
+      border: 2px solid #333;
+      color: #fff;
+      padding: 12px 16px;
+      margin: 10px;
+      width: 60%;
+      font-size: 16px;
+      border-radius: 8px;
+      transition: 0.3s ease;
+      outline: none;
+    }
+  
+    input:focus {
+      border-color: #00bcd4;
+      box-shadow: 0 0 5px #00bcd4;
+    }
+  
+    button {
+      background: linear-gradient(135deg, #00bcd4, #1de9b6);
+      border: none;
+      padding: 12px 25px;
+      font-size: 16px;
+      color: white;
+      border-radius: 10px;
+      margin-top: 20px;
+      cursor: pointer;
+      transition: transform 0.2s, background 0.3s;
+    }
+  
+    button:hover {
+      transform: scale(1.05);
+      background: linear-gradient(135deg, #1de9b6, #00bcd4);
+      box-shadow: 0 4px 15px rgba(0, 188, 212, 0.3);
+    }
+  
+    .results {
+      margin-top: 40px;
+      text-align: left;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 30px;
+      background: #1e1e1e;
+      border-radius: 12px;
+      box-shadow: 0 0 10px #00bcd4;
+    }
+  
+    .algo {
+      margin-bottom: 25px;
+    }
+  
+    .algo h3 {
+      margin-bottom: 10px;
+      color: #1de9b6;
+    }
+  
+    .algo p {
+      margin: 4px 0;
+      color: #ccc;
+      font-size: 15px;
+    }  
+  </style>
+</head>
+<body>
+  <h1>HDD Scheduling Simulator</h1>
+  <input type="text" id="queue" placeholder="Enter disk queue (e.g. 82 170 43 140 24 16 190)" /><br />
+  <input type="number" id="head" placeholder="Initial head position" /><br />
+  <input type="number" id="diskSize" placeholder="Total disk size (e.g. 200)" /><br />
+  <button onclick="simulate()">Simulate</button>
+
+  <div class="results" id="results"></div>
+
+  <script>
+    function simulate() {
+      const queue = document.getElementById("queue").value.split(" ").map(Number);
+      const head = parseInt(document.getElementById("head").value);
+      const diskSize = parseInt(document.getElementById("diskSize").value);
+      const resultsDiv = document.getElementById("results");
+      resultsDiv.innerHTML = "";
+
+      const results = {
+        FCFS: fcfs(queue, head),
+        SSTF: sstf(queue, head),
+        SCAN: scan(queue, head, diskSize),
+        'C-SCAN': cscan(queue, head, diskSize),
+        LOOK: look(queue, head),
+        'C-LOOK': clook(queue, head),
+      };
+
+      for (const algo in results) {
+        const { sequence, movement } = results[algo];
+        resultsDiv.innerHTML += `
+          <div class="algo">
+            <h3>${algo}</h3>
+            <p><strong>Sequence:</strong> ${sequence.join(" → ")}</p>
+            <p><strong>Total Head Movement:</strong> ${movement}</p>
+          </div>
+        `;
+      }
+    }
+
+    function fcfs(queue, head) {
+      let movement = 0, current = head;
+      const seq = [current];
+      for (const req of queue) {
+        movement += Math.abs(current - req);
+        current = req;
+        seq.push(current);
+      }
+      return { sequence: seq, movement };
+    }
+
+    function sstf(queue, head) {
+      let movement = 0, current = head;
+      const seq = [current], q = [...queue];
+      while (q.length) {
+        q.sort((a, b) => Math.abs(a - current) - Math.abs(b - current));
+        const next = q.shift();
+        movement += Math.abs(current - next);
+        current = next;
+        seq.push(current);
+      }
+      return { sequence: seq, movement };
+    }
+
+    function scan(queue, head, diskSize) {
+      let movement = 0, current = head;
+      const seq = [current];
+      const left = queue.filter(r => r < head).sort((a,b)=>b-a);
+      const right = queue.filter(r => r >= head).sort((a,b)=>a-b);
+      for (const r of right) {
+        movement += Math.abs(current - r);
+        current = r;
+        seq.push(current);
+      }
+      if (current < diskSize - 1) {
+        movement += Math.abs(current - (diskSize - 1));
+        current = diskSize - 1;
+        seq.push(current);
+      }
+      for (const r of left) {
+        movement += Math.abs(current - r);
+        current = r;
+        seq.push(current);
+      }
+      return { sequence: seq, movement };
+    }
+
+    function cscan(queue, head, diskSize) {
+      let movement = 0, current = head;
+      const seq = [current];
+      const left = queue.filter(r => r < head).sort((a,b)=>a-b);
+      const right = queue.filter(r => r >= head).sort((a,b)=>a-b);
+      for (const r of right) {
+        movement += Math.abs(current - r);
+        current = r;
+        seq.push(current);
+      }
+      if (current < diskSize - 1) {
+        movement += Math.abs(current - (diskSize - 1));
+        current = diskSize - 1;
+        seq.push(current);
+      }
+      movement += diskSize - 1; // jump to 0
+      current = 0;
+      seq.push(0);
+      for (const r of left) {
+        movement += Math.abs(current - r);
+        current = r;
+        seq.push(current);
+      }
+      return { sequence: seq, movement };
+    }
+
+    function look(queue, head) {
+      let movement = 0, current = head;
+      const seq = [current];
+      const left = queue.filter(r => r < head).sort((a,b)=>b-a);
+      const right = queue.filter(r => r >= head).sort((a,b)=>a-b);
+      for (const r of right) {
+        movement += Math.abs(current - r);
+        current = r;
+        seq.push(current);
+      }
+      for (const r of left) {
+        movement += Math.abs(current - r);
+        current = r;
+        seq.push(current);
+      }
+      return { sequence: seq, movement };
+    }
+
+    function clook(queue, head) {
+      let movement = 0, current = head;
+      const seq = [current];
+      const left = queue.filter(r => r < head).sort((a,b)=>a-b);
+      const right = queue.filter(r => r >= head).sort((a,b)=>a-b);
+      for (const r of right) {
+        movement += Math.abs(current - r);
+        current = r;
+        seq.push(current);
+      }
+      if (left.length > 0) {
+        movement += Math.abs(current - left[0]);
+        current = left[0];
+        seq.push(current);
+        for (let i = 1; i < left.length; i++) {
+          movement += Math.abs(current - left[i]);
+          current = left[i];
+          seq.push(current);
+        }
+      }
+      return { sequence: seq, movement };
+    }
+  </script>
+</body>
+</html>
